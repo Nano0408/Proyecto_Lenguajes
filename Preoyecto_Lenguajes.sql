@@ -286,7 +286,6 @@ END;
 
 
 
-
 -- Obtener Informaci�n del Usuario
 CREATE OR REPLACE PROCEDURE Get_User_Info(
     p_UserID NUMBER,
@@ -325,13 +324,17 @@ END;
 -- Obtener Detalles de una Cita
 CREATE OR REPLACE PROCEDURE Get_Appointment_Details(
     p_AppointmentID NUMBER,
-    p_Date OUT DATE,
-    p_Time OUT VARCHAR2,
-    p_ProvinceID OUT NUMBER
+    p_ClienteID NUMBER,
+    P_EspecialistaID,
+    p_Date DATE,
+    p_Time VARCHAR2,
+    p_ProvinciaID NUMBER,
+    p_SucursalID NUMBER,
+    P_TipocitaID NUMBER,
+    P_Estado VARCHAR2,
 ) AS
 BEGIN
-    SELECT FECHA, HORA, PROVINCIA_ID INTO p_Date, p_Time, p_ProvinceID
-    FROM TB_APPOINTMENTS
+    SELECT CLIENTE_ID, ESPECIALISTA_ID, FECHA, HORA, PROVINCIA_ID, SUCURSAL_ID, TIPOCITA_ID, ESTADO INTO p_ClienteID, P_EspecialistaID p_Date, p_Time, p_ProvinciaID, p_SucursalID, p_TipocitaID, p_Estado    FROM TB_APPOINTMENTS
     WHERE APPOINTMENT_ID = p_AppointmentID;
 END;
 
@@ -344,29 +347,6 @@ BEGIN
     END LOOP;
 END;
 
--- Obtener Detalles del Pago
-CREATE OR REPLACE PROCEDURE Get_Payment_Details(
-    p_PaymentID NUMBER,
-    p_Detail OUT VARCHAR2,
-    p_Total OUT NUMBER,
-    p_PaymentDay OUT DATE
-) AS
-BEGIN
-    SELECT DETAIL, TOTAL, PAYMENT_DAY INTO p_Detail, p_Total, p_PaymentDay
-    FROM TB_PAYMENTS
-    WHERE ID_PAYMENTS = p_PaymentID;
-END;
-
--- Listar Pagos de un Usuario
-CREATE OR REPLACE PROCEDURE List_User_Payments(
-    p_UserID NUMBER
-) AS
-BEGIN
-    FOR rec IN (SELECT * FROM TB_PAYMENTS WHERE ID_SESSIONS = p_UserID) 
-    LOOP
-        DBMS_OUTPUT.PUT_LINE('Payment ID: ' || rec.ID_PAYMENTS || ', Detail: ' || rec.DETAIL || ', Total: ' || rec.TOTAL);
-    END LOOP;
-END;
 
 -- Obtener Detalles de una Factura
 CREATE OR REPLACE PROCEDURE Get_Invoice_Details(
@@ -389,44 +369,6 @@ BEGIN
     END LOOP;
 END;
 
--- Obtener Facturas de un Usuario
-CREATE OR REPLACE PROCEDURE List_User_Invoices(
-    p_UserID NUMBER
-) AS
-BEGIN
-    FOR rec IN (SELECT f.* 
-                FROM TB_FACTURA f
-                JOIN TB_SESSIONS s ON f.ID_SESSIONS = s.ID_SESSIONS
-                WHERE s.USER_ID_SESSIONS = p_UserID) 
-    LOOP
-        DBMS_OUTPUT.PUT_LINE('Invoice ID: ' || rec.FACTURA_ID || ', Session ID: ' || rec.ID_SESSIONS || ', Payment ID: ' || rec.ID_PAYMENTS);
-    END LOOP;
-END;
-
--- Crear Factura
-CREATE OR REPLACE PROCEDURE Create_Invoice(
-    p_SessionID NUMBER,
-    p_PaymentID NUMBER,
-    p_InvoiceID OUT NUMBER
-) AS
-BEGIN
-    INSERT INTO TB_FACTURA(FACTURA_ID, ID_SESSIONS, ID_PAYMENTS)
-    VALUES (PAYMENT_SEQ.NEXTVAL, p_SessionID, p_PaymentID)
-    RETURNING FACTURA_ID INTO p_InvoiceID;
-END;
-
--- Actualizar Detalles de una Cita
-CREATE OR REPLACE PROCEDURE Update_Appointment_Details(
-    p_AppointmentID NUMBER,
-    p_NewDate DATE,
-    p_NewTime VARCHAR2,
-    p_NewProvinceID NUMBER
-) AS
-BEGIN
-    UPDATE TB_APPOINTMENTS
-    SET FECHA = p_NewDate, HORA = p_NewTime, PROVINCIA_ID = p_NewProvinceID
-    WHERE APPOINTMENT_ID = p_AppointmentID;
-END;
 
 -- Obtener Detalles de un Usuario por Correo Electr�nico
 CREATE OR REPLACE PROCEDURE Get_User_DetailsByEmail(
@@ -462,80 +404,73 @@ END;
 
 --vistas
 
---Vista de Usuarios y Sesiones:
+--Vista de Usuarios y  Clientes:
 CREATE OR REPLACE VIEW UsersAndSessions AS
-SELECT U.ID_SESSIONS, U.NAME_USERS, U.EMAIL, S.DETAIL
+SELECT U.USER_ID, U.NAME_USERS, U.EMAIL, C.CLIENTE_ID
 FROM TB_USERS U
-INNER JOIN TB_SESSIONS S ON U.ID_SESSIONS = S.ID_SESSIONS;
+INNER JOIN TB_CLIENTES C ON U.CLIENTE_ID = C.CLIENTE_ID;
 
 --Vista de Clientes y Provincias:
 CREATE OR REPLACE VIEW ClientsAndPROVINCIA_ID AS
-SELECT C.ID_SESSIONS, C.FIRST_NAME, C.LAST_NAME, C.BIRTHDAY, P.NAME AS PROVINCE_NAME
+SELECT C.CLIENTE_ID, C.FIRST_NAME, C.LAST_NAME, C.BIRTHDATE, P.NAME AS PROVINCIA_NAME
 FROM TB_CLIENTES C
-INNER JOIN TB_PROVINCIA P ON C.PROVINCIA_ID = P.ID;
+INNER JOIN TB_PROVINCIA P ON C.PROVINCIA_ID = P.PROVINCIA_ID;
 
 
---Vista de Sesiones y Citas:
-CREATE OR REPLACE VIEW SessionsAndAppointments AS
-SELECT S.ID_SESSIONS, S.DETAIL, A.FECHA, A.HORA
-FROM TB_SESSIONS S
-INNER JOIN TB_APPOINTMENTS A ON S.ID_SESSIONS = A.ID_SESSIONS;
+--Vista de Clientes y Citas:
+CREATE OR REPLACE VIEW ClientssAndAppointments AS
+SELECT C.CLIENTE_ID, C.FIRST_NAME, A.FECHA, A.HORA
+FROM TB_CLIENTES C
+INNER JOIN TB_APPOINTMENTS A ON C.CLIENTE_ID = A.CLIENTE_ID;
 
---Vista de Usuarios con Detalles de Sesiones:
-CREATE OR REPLACE VIEW UsersWithSessionDetails AS
-SELECT U.NAME_USERS, U.EMAIL, S.DETAIL
+--Vista de Usuarios con Detalles de Citas:
+CREATE OR REPLACE VIEW UsersWithAppointmentDetails AS
+SELECT U.NAME_USERS, U.EMAIL, AU.DESCRIPCION
 FROM TB_USERS U
-LEFT JOIN TB_SESSIONS S ON U.ID_SESSIONS = S.ID_SESSIONS;
+LEFT JOIN TB_AUDITORIACITAS AU ON U.DESCRIPCION = AU.DESCRIPCION;
 
 
---Vista de Clientes con Informaci�n de Pagos:
-CREATE OR REPLACE VIEW ClientsWithPayments AS
-SELECT C.FIRST_NAME, C.LAST_NAME, P.DETAIL, P.TOTAL
+--Vista de Clientes con Informaci�n de Tipo citas:
+CREATE OR REPLACE VIEW ClientsWithAppointmentType AS
+SELECT C.FIRST_NAME, C.LAST_NAME, T.TIPOCITA_ID, T.NOMBRE_TIPOCITA
 FROM TB_CLIENTES C
-LEFT JOIN TB_PAYMENTS P ON C.ID_SESSIONS = P.ID_SESSIONS;
+LEFT JOIN TB_TIPOCITAS T ON C.NOMBRE_TIPOCITA = T.NOMBRE_TIPOCITA;
 
 --Vista de Citas por Provincia:
 CREATE OR REPLACE VIEW AppointmentsByProvince AS
-SELECT A.FECHA, A.HORA, P.NAME AS PROVINCE_NAME
+SELECT A.FECHA, A.HORA, P.NAME AS PROVINCIA_NAME
 FROM TB_APPOINTMENTS A
-INNER JOIN TB_PROVINCIA P ON A.PROVINCIA_ID = P.ID;
+INNER JOIN TB_PROVINCIA P ON A.PROVINCIA_ID = P.PROVINCIA_ID;
 
-
---Vista de Facturas con Detalles de Pagos:
-CREATE OR REPLACE VIEW InvoicesWithPaymentDetails AS
-SELECT F.ID_SESSIONS, F.ID_PAYMENTS, P.DETAIL, P.TOTAL
-FROM TB_FACTURA F
-LEFT JOIN TB_PAYMENTS P ON F.ID_PAYMENTS = P.ID_PAYMENTS;
-
---Vista de Sesiones con Usuarios y Clientes:
+--Vista de citas con Usuarios y Clientes:
 CREATE OR REPLACE VIEW SessionsWithUsersAndClients AS
-SELECT S.ID_SESSIONS, S.DETAIL, U.NAME_USERS, C.FIRST_NAME, C.LAST_NAME
-FROM TB_SESSIONS S
-LEFT JOIN TB_USERS U ON S.ID_SESSIONS = U.ID_SESSIONS
-LEFT JOIN TB_CLIENTES C ON S.ID_SESSIONS = C.ID_SESSIONS;
+SELECT AU.AUDITORIA_ID, AU.DESCRIPCION, U.NAME_USERS, C.FIRST_NAME, C.LAST_NAME
+FROM TB_AUDITORIACITAS AU
+LEFT JOIN TB_USERS U ON AU.AUDITORIA_ID = U.AUDITORIA_ID
+LEFT JOIN TB_CLIENTES C ON AU.AUDITORIA_ID = C.AUDITORIA_ID;
 
---Vista de Sesiones y Usuarios sin Clientes:
+--Vista de citas y Usuarios sin Clientes:
 CREATE OR REPLACE VIEW SessionsWithUsersWithoutClients AS
-SELECT S.ID_SESSIONS, S.DETAIL, U.NAME_USERS
-FROM TB_SESSIONS S
-LEFT JOIN TB_USERS U ON S.ID_SESSIONS = U.ID_SESSIONS
-WHERE S.ID_SESSIONS NOT IN (SELECT ID_SESSIONS FROM TB_CLIENTES);
+SELECT AU.AUDITORIA_ID, AU.DESCRIPCION, U.NAME_USERS
+FROM TB_AUDITORIACITAS AU
+LEFT JOIN TB_USERS U ON AU.AUDITORIA_ID = U.AUDITORIA_ID
+WHERE AU.AUDITORIA_ID NOT IN (SELECT AUDITORIA_ID FROM TB_CLIENTES);
 
 
---Vista de Sesiones y Provincias de los Clientes:
+--Vista de Auditoriacitas y Provincias de los Clientes:
 CREATE OR REPLACE VIEW SessionsWithClientPROVINCIA_ID AS
-SELECT S.ID_SESSIONS, S.DETAIL, P.NAME AS PROVINCE_NAME
-FROM TB_SESSIONS S
-INNER JOIN TB_CLIENTES C ON S.ID_SESSIONS = C.ID_SESSIONS
-INNER JOIN TB_PROVINCIA P ON C.PROVINCIA_ID = P.ID;
+SELECT AU.AUDITORIA_ID, AU.DESCRIPCION, P.NAME AS PROVINCIA_NAME
+FROM TB_AUDITORIACITAS AU
+INNER JOIN TB_CLIENTES C ON AU.AUDITORIA_ID = C.AUDITORIA_ID
+INNER JOIN TB_PROVINCIA P ON C.PROVINCIA_ID = P.PROVINCIA_ID;
 
 --Funciones
 
 --Funci�n para Calcular la Edad de un Cliente a partir de su Fecha de Nacimiento:
-CREATE OR REPLACE FUNCTION CalculateAge(p_Birthday DATE) RETURN NUMBER IS
+CREATE OR REPLACE FUNCTION CalculateAge(p_Birthdate DATE) RETURN NUMBER IS
     v_Age NUMBER;
 BEGIN
-    v_Age := TRUNC(MONTHS_BETWEEN(SYSDATE, p_Birthday) / 12);
+    v_Age := TRUNC(MONTHS_BETWEEN(SYSDATE, p_Birthdate) / 12);
     RETURN v_Age;
 END;
 
@@ -550,108 +485,48 @@ BEGIN
     RETURN v_Count > 0;
 END;
 
---Funci�n para Calcular el Total de Pagos de un Cliente:
-CREATE OR REPLACE FUNCTION CalculateTotalPayments(p_ID_SESSIONS NUMBER) RETURN NUMBER IS
-    v_Total NUMBER;
-BEGIN
-    SELECT SUM(TOTAL) INTO v_Total
-    FROM TB_PAYMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_Total;
-END;
 
 --Funci�n para Encontrar el Pr�ximo Disponible en una Cita:
-CREATE OR REPLACE FUNCTION FindNextAvailableAppointment(p_ID_SESSIONS NUMBER) RETURN DATE IS
+CREATE OR REPLACE FUNCTION FindNextAvailableAppointment(p_AppointmentID NUMBER) RETURN DATE IS
     v_NextAppointment DATE;
 BEGIN
     SELECT MIN(FECHA) INTO v_NextAppointment
     FROM TB_APPOINTMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS AND FECHA > SYSDATE;
+    WHERE APPOINTMENT_ID = p_AppointmentID AND FECHA > SYSDATE;
     RETURN v_NextAppointment;
 END;
 
---Funci�n para Calcular el Total de Facturas Pendientes para un Cliente:
-CREATE OR REPLACE FUNCTION CalculateOutstandingInvoices(p_ID_SESSIONS NUMBER) RETURN NUMBER IS
-    v_OutstandingTotal NUMBER;
-BEGIN
-    SELECT SUM(P.TOTAL)
-    INTO v_OutstandingTotal
-    FROM TB_FACTURA F
-    JOIN TB_PAYMENTS P ON F.ID_PAYMENTS = P.ID_PAYMENTS
-    WHERE F.ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_OutstandingTotal;
-END;
-
---Funci�n para Verificar si una Sesi�n Tiene Usuarios Asociados:
-CREATE OR REPLACE FUNCTION HasAssociatedUsers(p_ID_SESSIONS NUMBER) RETURN BOOLEAN IS
-    v_Count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_Count
-    FROM TB_USERS
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_Count > 0;
-END;
 
 --Funci�n para Calcular la Cantidad de Citas de un Cliente en una Fecha Espec�fica:
-CREATE OR REPLACE FUNCTION CountAppointmentsOnDate(p_ID_SESSIONS NUMBER, p_Date DATE) RETURN NUMBER IS
+CREATE OR REPLACE FUNCTION CountAppointmentsOnDate(p_AppointmentID NUMBER, p_Date DATE) RETURN NUMBER IS
     v_Count NUMBER;
 BEGIN
     SELECT COUNT(*) INTO v_Count
     FROM TB_APPOINTMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS AND FECHA = p_Date;
+    WHERE APPOINTMENT_ID = p_AppointmentID AND FECHA = p_Date;
     RETURN v_Count;
 END;
 
 --Funci�n para Calcular el Promedio de Edades de los Clientes en una Provincia:
-CREATE OR REPLACE FUNCTION CalculateAverageAgeInProvince(p_ProvinceID NUMBER) RETURN NUMBER IS
+CREATE OR REPLACE FUNCTION CalculateAverageAgeInProvince(p_ProvinciaID NUMBER) RETURN NUMBER IS
     v_AvgAge NUMBER;
 BEGIN
-    SELECT AVG(CalculateAge(C.BIRTHDAY)) INTO v_AvgAge
+    SELECT AVG(CalculateAge(C.BIRTHDATE)) INTO v_AvgAge
     FROM TB_CLIENTES C
-    WHERE C.PROVINCIA_ID = p_ProvinceID;
+    WHERE C.PROVINCIA_ID = p_ProvinciaID;
     RETURN v_AvgAge;
 END;
 
---Funci�n para Encontrar el �ltimo Pago Realizado por un Cliente:
-CREATE OR REPLACE FUNCTION FindLastPayment(p_ID_SESSIONS NUMBER) RETURN DATE IS
-    v_LastPaymentDate DATE;
-BEGIN
-    SELECT MAX(PAYMENT_DAY) INTO v_LastPaymentDate
-    FROM TB_PAYMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_LastPaymentDate;
-END;
-
 --Funci�n para Calcular la Cantidad de Clientes por Provincia:
-CREATE OR REPLACE FUNCTION CountClientsInProvince(p_ProvinceID NUMBER) RETURN NUMBER IS
+CREATE OR REPLACE FUNCTION CountClientsInProvince(p_ProvincIAID NUMBER) RETURN NUMBER IS
     v_Count NUMBER;
 BEGIN
     SELECT COUNT(*) INTO v_Count
     FROM TB_CLIENTES
-    WHERE PROVINCIA_ID = p_ProvinceID;
+    WHERE PROVINCIA_ID = p_ProvinciaID;
     RETURN v_Count;
 END;
 
---Funci�n para Verificar si un Cliente tiene Facturas Pendientes:
-CREATE OR REPLACE FUNCTION HasOutstandingInvoices(p_ID_SESSIONS NUMBER) RETURN BOOLEAN IS
-    v_Count NUMBER;
-BEGIN
-    SELECT COUNT(*) INTO v_Count
-    FROM TB_FACTURA
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_Count > 0;
-END;
-
-
---Funci�n para Calcular el Promedio de Pagos Mensuales de un Cliente:
-CREATE OR REPLACE FUNCTION CalculateAvgMonthlyPayments(p_ID_SESSIONS NUMBER) RETURN NUMBER IS
-    v_AvgPayments NUMBER;
-BEGIN
-    SELECT AVG(TOTAL) INTO v_AvgPayments
-    FROM TB_PAYMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
-    RETURN v_AvgPayments;
-END;
 
 --Funci�n para Encontrar el Cliente con M�s Citas Programadas:
 CREATE OR REPLACE FUNCTION FindClientWithMostAppointments RETURN VARCHAR2 IS
@@ -663,30 +538,24 @@ BEGIN
     FROM (
         SELECT COUNT(*) AS AppointmentCount, C.FIRST_NAME || ' ' || C.LAST_NAME AS ClientName
         FROM TB_APPOINTMENTS A
-        JOIN TB_CLIENTES C ON A.ID_SESSIONS = C.ID_SESSIONS
+        JOIN TB_CLIENTES C ON A.APPOINTMENT_ID = C.APPOINTMENT_ID
         GROUP BY C.FIRST_NAME || ' ' || C.LAST_NAME
     );
     RETURN v_ClientName;
 END;
 
 
---Funci�n para Verificar si una Sesi�n Tiene Citas Programadas:
-CREATE OR REPLACE FUNCTION HasAppointments(p_ID_SESSIONS NUMBER) RETURN BOOLEAN IS
+--Funci�n para Verificar si un usuario Tiene Citas Programadas:
+CREATE OR REPLACE FUNCTION HasAppointments(p_UserID NUMBER) RETURN BOOLEAN IS
     v_Count NUMBER;
 BEGIN
     SELECT COUNT(*) INTO v_Count
     FROM TB_APPOINTMENTS
-    WHERE ID_SESSIONS = p_ID_SESSIONS;
+    WHERE USER_ID = p_UserID;
     RETURN v_Count > 0;
 END;
 
---Funci�n para Calcular la Deuda Total de un Cliente:
-CREATE OR REPLACE FUNCTION CalculateTotalDebt(p_ID_SESSIONS NUMBER) RETURN NUMBER IS
-    v_TotalDebt NUMBER;
-BEGIN
-    v_TotalDebt := CalculateOutstandingInvoices(p_ID_SESSIONS) + CalculateTotalPayments(p_ID_SESSIONS);
-    RETURN v_TotalDebt;
-END;
+
 
 --triggers
 
@@ -754,7 +623,7 @@ BEGIN
     FOR user_rec IN user_cursor LOOP
         -- Procesa los registros aqu�
         -- Por ejemplo, puedes imprimir informaci�n sobre cada registro:
-        DBMS_OUTPUT.PUT_LINE('ID_SESSIONS: ' || user_rec.ID_SESSIONS);
+        DBMS_OUTPUT.PUT_LINE('USER_ID: ' || user_rec.USER_ID);
         DBMS_OUTPUT.PUT_LINE('NAME_USERS: ' || user_rec.NAME_USERS);
         DBMS_OUTPUT.PUT_LINE('EMAIL: ' || user_rec.EMAIL);
         
@@ -779,7 +648,7 @@ CREATE OR REPLACE PROCEDURE List_Users_With_Pending_Appointments_Cursor AS
     CURSOR user_cursor IS
         SELECT U.*
         FROM TB_USERS U
-        JOIN TB_APPOINTMENTS A ON U.USER_ID = A.ID_SESSIONS;
+        JOIN TB_APPOINTMENTS A ON U.USER_ID = A.APPOINTMENT_ID;
 BEGIN
     FOR rec IN user_cursor
     LOOP
@@ -789,12 +658,12 @@ END;
 
 --Cursor para Listar Citas de una Provincia
 CREATE OR REPLACE PROCEDURE List_Appointments_By_Province_Cursor(
-    p_ProvinceID NUMBER
+    p_ProvinciaID NUMBER
 ) AS
     CURSOR appointment_cursor IS
         SELECT *
         FROM TB_APPOINTMENTS
-        WHERE PROVINCIA_ID = p_ProvinceID;
+        WHERE PROVINCIA_ID = p_ProvinciaID;
 BEGIN
     FOR rec IN appointment_cursor
     LOOP
@@ -804,13 +673,13 @@ END;
 
 --Cursor para Listar Usuarios de una Provincia
 CREATE OR REPLACE PROCEDURE List_Users_By_Province_Cursor(
-    p_ProvinceID NUMBER
+    p_ProvinciaID NUMBER
 ) AS
     CURSOR user_cursor IS
         SELECT U.*
         FROM TB_USERS U
         JOIN TB_CLIENTES C ON U.USER_ID = C.User_idParent
-        WHERE C.PROVINCIA_ID = p_ProvinceID;
+        WHERE C.PROVINCIA_ID = p_ProvinciaID;
 BEGIN
     FOR rec IN user_cursor
     LOOP
@@ -818,22 +687,6 @@ BEGIN
     END LOOP;
 END;
 
---Cursor para Cancelar Pago
-CREATE OR REPLACE PROCEDURE Cancel_Payment_Cursor(
-    p_PaymentID NUMBER
-) AS
-    CURSOR payment_cursor IS
-        SELECT * FROM TB_PAYMENTS
-        WHERE ID_PAYMENTS = p_PaymentID
-        FOR UPDATE;
-BEGIN
-    FOR rec IN payment_cursor
-    LOOP
-        DELETE FROM TB_PAYMENTS
-        WHERE CURRENT OF payment_cursor;
-    END LOOP;
-    COMMIT;
-END;
 
 --Cursor para Actualizar Informaci�n del Usuario:
 CREATE OR REPLACE PROCEDURE Update_User_Info_Cursor(
@@ -855,38 +708,6 @@ BEGIN
     COMMIT;
 END;
 
---Cursor para Obtener Detalles de una Factura
-CREATE OR REPLACE PROCEDURE Get_Invoice_Details_Cursor(
-    p_InvoiceID NUMBER,
-    p_SessionID OUT NUMBER,
-    p_PaymentID OUT NUMBER
-) AS
-    CURSOR invoice_cursor IS
-        SELECT ID_SESSIONS, ID_PAYMENTS
-        INTO p_SessionID, p_PaymentID
-        FROM TB_FACTURA
-        WHERE FACTURA_ID = p_InvoiceID;
-BEGIN
-    OPEN invoice_cursor;
-    FETCH invoice_cursor INTO p_SessionID, p_PaymentID;
-    CLOSE invoice_cursor;
-END;
-
---Cursor para Listar Pagos de un Usuario
-CREATE OR REPLACE PROCEDURE List_User_Payments_Cursor(
-    p_UserID NUMBER
-) AS
-    CURSOR payment_cursor IS
-        SELECT * FROM TB_PAYMENTS
-        WHERE ID_SESSIONS = p_UserID;
-BEGIN
-    OPEN payment_cursor;
-    FOR rec IN payment_cursor
-    LOOP
-        DBMS_OUTPUT.PUT_LINE('Payment ID: ' || rec.ID_PAYMENTS || ', Detail: ' || rec.DETAIL || ', Total: ' || rec.TOTAL);
-    END LOOP;
-    CLOSE payment_cursor;
-END;
 
 --Cursor para Obtener Informaci�n del Usuario
 CREATE OR REPLACE PROCEDURE Get_User_Info_Cursor(
@@ -905,80 +726,40 @@ BEGIN
     CLOSE user_cursor;
 END;
 
---Cursor para Obtener Detalles del Pago
-CREATE OR REPLACE PROCEDURE Get_Payment_Details_Cursor(
-    p_PaymentID NUMBER,
-    p_Detail OUT VARCHAR2,
-    p_Total OUT NUMBER,
-    p_PaymentDay OUT DATE
-) AS
-    CURSOR payment_cursor IS
-        SELECT DETAIL, TOTAL, PAYMENT_DAY
-        INTO p_Detail, p_Total, p_PaymentDay
-        FROM TB_PAYMENTS
-        WHERE ID_PAYMENTS = p_PaymentID;
-BEGIN
-    OPEN payment_cursor;
-    FETCH payment_cursor INTO p_Detail, p_Total, p_PaymentDay;
-    CLOSE payment_cursor;
-END;
-
-
 --Cursor para Obtener Detalles de una Cita
 CREATE OR REPLACE PROCEDURE Get_Appointment_Details_Cursor(
     p_AppointmentID NUMBER,
-    p_Date OUT DATE,
-    p_Time OUT VARCHAR2,
-    p_ProvinceID OUT NUMBER
+    p_ClienteID NUMBER,
+    P_EspecialistaID,
+    p_Date DATE,
+    p_Time VARCHAR2,
+    p_ProvinciaID NUMBER,
+    p_SucursalID NUMBER,
+    P_TipocitaID NUMBER,
+    P_Estado VARCHAR2
 ) AS
     CURSOR appointment_cursor IS
-        SELECT FECHA, HORA, PROVINCIA_ID 
-        INTO p_Date, p_Time, p_ProvinceID
+        SELECT APPOINTMENT_ID, CLIENTE_ID, ESPECIALISTA_ID, FECHA, HORA, PROVINCIA_ID, SUCURSAL_ID, TIPOCITA_ID, ESTADO 
+        INTO p_AppointmentID, p_ClienteID, P_EspecialistaID, p_Date, p_Time, p_ProvinciaID, p_SucursalID, p_TipocitaID, p_Estado
         FROM TB_APPOINTMENTS
         WHERE APPOINTMENT_ID = p_AppointmentID;
 BEGIN
     OPEN appointment_cursor;
-    FETCH appointment_cursor INTO p_Date, p_Time, p_ProvinceID;
+    FETCH appointment_cursor INTO p_Date, p_Time, p_ProvinciaID;
     CLOSE appointment_cursor;
 END;
 
---Cursor para Listar Todas las Facturas
-CREATE OR REPLACE PROCEDURE List_All_Invoices_Cursor AS
-    CURSOR invoice_cursor IS
-        SELECT * FROM TB_FACTURA;
-BEGIN
-    FOR rec IN invoice_cursor
-    LOOP
-        DBMS_OUTPUT.PUT_LINE('Invoice ID: ' || rec.FACTURA_ID || ', Session ID: ' || rec.ID_SESSIONS || ', Payment ID: ' || rec.ID_PAYMENTS);
-    END LOOP;
-END;
 
 --Cursor para Listar Usuarios con Citas Programadas para Hoy
 CREATE OR REPLACE PROCEDURE List_Users_With_Appointments_Today_Cursor AS
     CURSOR user_cursor IS
         SELECT DISTINCT U.*
         FROM TB_USERS U
-        JOIN TB_APPOINTMENTS A ON U.USER_ID = A.ID_SESSIONS
+        JOIN TB_APPOINTMENTS A ON U.USER_ID = A.USER_ID
         WHERE TRUNC(A.FECHA) = TRUNC(SYSDATE);
 BEGIN
     FOR rec IN user_cursor
     LOOP
         DBMS_OUTPUT.PUT_LINE('User ID: ' || rec.USER_ID || ', Name: ' || rec.NAME_USERS || ', Email: ' || rec.EMAIL);
     END LOOP;
-END;
-
---Cursor para Listar Pagos de un Usuario
-CREATE OR REPLACE PROCEDURE List_User_Payments_Cursor(
-    p_UserID NUMBER
-) AS
-    CURSOR payment_cursor IS
-        SELECT * FROM TB_PAYMENTS
-        WHERE ID_SESSIONS = p_UserID;
-BEGIN
-    OPEN payment_cursor;
-    FOR rec IN payment_cursor
-    LOOP
-        DBMS_OUTPUT.PUT_LINE('Payment ID: ' || rec.ID_PAYMENTS || ', Detail: ' || rec.DETAIL || ', Total: ' || rec.TOTAL);
-    END LOOP;
-    CLOSE payment_cursor;
 END;
